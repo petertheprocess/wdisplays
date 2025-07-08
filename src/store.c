@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// SPDX-FileCopyrightText: 2024-2025 <petertheprocess>
+// SPDX-FileCopyrightText: 2024-2025 Shaochang Tan
 // SPDX-FileCopyrightText: 2024-2025 Jason André Charles Gantner
 
 #include "wdisplays.h"
