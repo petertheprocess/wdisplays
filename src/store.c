@@ -97,9 +97,9 @@ char *wd_get_config_file_path() {
 struct profile_line match(char **descriptions, int num, const char *filename) {
   struct profile_line matched_profile;
   matched_profile.start = -1;
-  matched_profile.end   = -1;
+  matched_profile.end = -1;
   // -1 means not found
-  FILE *configFile      = fopen(filename, "r");
+  FILE *configFile = fopen(filename, "r");
   if (configFile == NULL) {
     dprintf(2, "%s:%i:%s(): Can't open %s : ", __FILE__, __LINE__, __func__, filename);
     perror(NULL);
@@ -109,52 +109,73 @@ struct profile_line match(char **descriptions, int num, const char *filename) {
   char buffer[LINE_MAX];
   char *profileName;
   int profileStartLine = 0; // mark the start line of matched profile
-  int profileEndLine   = 0; // mark the end line of matched profile
-
-  int lineCount              = 0;                   // current line number
-  uint32_t profileMatchedNum = 0;                   // current number of matched outputs
-  parser_states ps           = Looking_for_profile; // current state of the parser
+  int profileEndLine = 0; // mark the end line of matched profile
+  int lineCount = 0; // current line number
+  uint32_t profileMatchedNum = 0; // current number of matched outputs
+  parser_states ps = Looking_for_profile; // current state of the parser
   while (ps != Found && fgets(buffer, sizeof(buffer), configFile) != NULL) {
     lineCount++;
     switch (ps) {
       case Found: break; // unreachable code
-
       case Looking_for_profile:;
         // check if "profile" keyword is in the line and remember its position
         char *pstart = strstr(buffer, "profile ");
         if (pstart != NULL) {
-          pstart     += 7;
-          char *pend  = strchr(pstart, '{'); // find the end of the profile name
+          pstart += 7;
+          char *pend = strchr(pstart, '{'); // find the end of the profile name
           while (isspace(*pend)) pend--;
-          size_t pnsize    = pend - pstart;
+          size_t pnsize = pend - pstart;
           // use strndup to extract it without being size constrained
-          profileName      = strndup(pstart, pnsize);
+          profileName = strndup(pstart, pnsize);
           // record the start line of the profile
           profileStartLine = lineCount;
-          ps               = Looking_for_outputs;
+          ps = Looking_for_outputs;
         }
         break;
-
       case Looking_for_outputs:
         // check if the profile ends
         if (buffer[0] == '}') {
           profileEndLine = lineCount;
           if (profileMatchedNum == num) ps = Found;
         } else {
-          char *on_start = strstr(buffer, "output");
-          on_start       = strchr(on_start, '"');
-          on_start++;
-          char *on_end     = strchr(on_start, '"');
-          char *outputName = strndup(on_start, on_end - on_start);
+          char outputName[MAX_NAME_LENGTH];
+          // 从当前行提取输出名称
+          char *trimmedBuffer = buffer;
+          while (isspace(*trimmedBuffer)) {
+            trimmedBuffer++; // skip leading spaces
+          }
+          char tempName[MAX_NAME_LENGTH];
+          int matched_scan = 0;
+         
+          // Try quoted format first (legacy): output "Long Description (DP-3)"
+          if (sscanf(trimmedBuffer, "output \"%255[^\"]\"", tempName) == 1) {
+            // Extract output name from parentheses if present: (DP-3) -> DP-3
+            char *paren_start = strrchr(tempName, '(');
+            char *paren_end = strrchr(tempName, ')');
+            if (paren_start && paren_end && paren_end > paren_start) {
+              size_t len = paren_end - paren_start - 1;
+              strncpy(outputName, paren_start + 1, len);
+              outputName[len] = '\0';
+              matched_scan = 1;
+            }
+          } else if (sscanf(trimmedBuffer, "output %99s", outputName) == 1) {
+            // Try unquoted format: output DP-3
+            matched_scan = 1;
+          }
+          if (matched_scan != 1) continue; // Skip unparseable lines
           // check if the output name is in the descriptions
-          int i            = 0;
-          while (descriptions[i] != NULL && strcmp(outputName, descriptions[i])) i++;
-          if (descriptions[i] != NULL) {
-            profileMatchedNum++;
-          } else {
+          bool matched = false;
+          for (int i = 0; descriptions[i] != NULL; i++) {
+            if (strcmp(outputName, descriptions[i]) == 0) {
+              matched = true;
+              profileMatchedNum++;
+              break;
+            }
+          }
+          if (!matched) {
             // if any output is not matched, break
             profileMatchedNum = 0;
-            ps                = Looking_for_profile;
+            ps = Looking_for_profile;
           }
         }
         break;
@@ -165,7 +186,7 @@ struct profile_line match(char **descriptions, int num, const char *filename) {
     printf("Matched profile:%s\n", profileName);
     printf("Start line:%d\nEnd line:%d\n", profileStartLine, profileEndLine);
     matched_profile.start = profileStartLine;
-    matched_profile.end   = profileEndLine;
+    matched_profile.end = profileEndLine;
   } else dprintf(2, "%s:%i:%s(): Cannot find existing profile to match\n", __FILE__, __LINE__, __func__);
   return matched_profile;
 }
@@ -199,12 +220,23 @@ int wd_store_config(struct wl_list *outputs) {
       default                             : trans_str = "normal";
     };
 
+<<<<<<< HEAD
+    if (description_index < MAX_MONITORS_NUM) {
+      descriptions[description_index] = strdup(head->name);
+      // write output config in given format
+      sprintf(
+          outputConfigs[description_index],
+          "output %s position %d,%d mode %dx%d@%.4f scale %.2f transform %s",
+          head->name, output->x, output->y, output->width,
+          output->height, output->refresh / 1.0e3, output->scale, trans_str);
+=======
     if (description_index < HEADS_MAX) {
       descriptions[description_index] = strdup(head->description);
       // write output config in given format
       sprintf(outputConfigs[description_index], "output \"%s\" position %d,%d mode %dx%d@%.4f scale %.2f transform %s",
               head->description, output->x, output->y, output->width, output->height, output->refresh / 1.0e3, output->scale,
               trans_str);
+>>>>>>> master
       description_index++;
     } else {
       dprintf(2, "Too many monitor!\n\t%i is the maximum allowed number", HEADS_MAX);
